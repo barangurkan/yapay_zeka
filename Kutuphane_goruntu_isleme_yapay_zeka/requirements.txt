@@ -1,0 +1,6 @@
+flask==2.0.1
+ultralytics==8.0.0
+opencv-python==4.8.0
+numpy==1.24.3
+SQLAlchemy==2.0.20
+python-dotenv==1.0.0 
