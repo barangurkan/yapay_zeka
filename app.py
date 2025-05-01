@@ -14,20 +14,18 @@ from werkzeug.utils import secure_filename
 import csv
 from io import StringIO
 
-# Global variable declaration
 camera = None
 last_frame = None
 last_analysis = None
 analysis_lock = threading.Lock()
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Güvenli bir anahtar kullanın
+app.secret_key = 'your-secret-key-here' 
 
 # YOLO modeli yükle
 model = YOLO("yolo12m.pt")
 
 
-# Login gerektiren sayfalar için decorator
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -39,7 +37,6 @@ def login_required(f):
     return decorated_function
 
 
-# Admin gerektiren sayfalar için decorator
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -67,7 +64,6 @@ class Camera:
             if not self.cap.isOpened():
                 raise RuntimeError('Kameraya bağlanılamadı.')
 
-            # Basit kamera ayarları
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
@@ -75,7 +71,6 @@ class Camera:
             print(f"Kamera başlatma hatası: {str(e)}")
             raise
 
-        # Analysis sonuçları için değişkenler
         self.last_analysis = {
             'sitting_count': 0,
             'total_people': 0,
@@ -86,7 +81,6 @@ class Camera:
 
     def analyze_frame(self, frame):
         try:
-            # Frame'i analiz et
             results = model(frame)[0]
 
             person_boxes = []
@@ -114,24 +108,18 @@ class Camera:
                         sitting_people += 1
                         break
 
-            # Kişileri çiz
             cv2.rectangle(frame, (person_box[0], person_box[1]),
                           (person_box[2], person_box[3]), (0, 0, 255), 2)
-
-            # Sandalyeleri çiz
             for box in chair_boxes:
                 cv2.rectangle(frame, (box[0], box[1]),
                               (box[2], box[3]), (255, 165, 0), 2)
 
-            # Bilgileri ekle
             cv2.putText(frame, f"Oturanlar: {sitting_people}", (30, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             cv2.putText(frame, f"Toplam Kisi: {len(person_boxes)}", (30, 70),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(frame, f"Sandalyeler: {len(chair_boxes)}", (30, 110),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 165, 0), 2)
-
-            # Analiz sonuçlarını güncelle
             self.last_analysis = {
                 'sitting_count': sitting_people,
                 'total_people': len(person_boxes),
@@ -154,7 +142,6 @@ class Camera:
         if not ret:
             return None
 
-        # Frame'i analiz et
         analyzed_frame = self.analyze_frame(frame.copy())
         return analyzed_frame
 
@@ -173,15 +160,12 @@ def generate_frames():
             time.sleep(0.1)
             continue
 
-        # Frame'i JPEG'e dönüştür
         ret, buffer = cv2.imencode('.jpg', frame)
         if not ret:
             continue
 
-        # Byte array'e çevir
         frame_bytes = buffer.tobytes()
 
-        # MIME multipart formatında gönder
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
@@ -193,12 +177,10 @@ def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    # Kamera durumunu kontrol et ve başlat
     global camera
     if camera is None:
         camera = Camera()
 
-    # Son analiz sonuçlarını al
     if camera and hasattr(camera, 'last_analysis'):
         with analysis_lock:
             analysis = camera.last_analysis.copy()
@@ -213,19 +195,17 @@ def index():
             'timestamp': datetime.now().isoformat()
         }
 
-    # Kullanıcının son analizlerini al
     db_session = Session()
     user_records = db_session.query(OccupancyRecord).filter_by(user_id=session['user_id']).order_by(
         OccupancyRecord.timestamp.desc()).limit(5).all()
     db_session.close()
 
-    # Kamera durumunu kontrol et
     try:
         if camera is None or not camera.cap or not camera.cap.isOpened():
             if camera is not None:
                 camera.__del__()
             camera = Camera()
-            time.sleep(2)  # Kameranın başlaması için bekle
+            time.sleep(2) 
     except Exception as e:
         print(f"Kamera başlatma hatası: {str(e)}")
 
@@ -246,11 +226,10 @@ def check_camera():
     global camera
     try:
         if camera is None or not camera.cap or not camera.cap.isOpened():
-            # Kamera bağlantısını yeniden başlat
             if camera is not None:
                 camera.__del__()
             camera = Camera()
-            time.sleep(2)  # Kameranın başlaması için bekle
+            time.sleep(2) 
 
             if camera.cap is not None and camera.cap.isOpened():
                 return jsonify({"status": "success", "message": "Kamera başarıyla başlatıldı"})
@@ -288,26 +267,21 @@ def get_current_status():
 
 
 def is_sitting_on_chair(person_box, chair_box):
-    # Kişi ve sandalye kutuları: [x1, y1, x2, y2]
     person_center_x = (person_box[0] + person_box[2]) / 2
     person_center_y = (person_box[1] + person_box[3]) / 2
 
-    # Sandalye merkezi
     chair_center_x = (chair_box[0] + chair_box[2]) / 2
     chair_center_y = (chair_box[1] + chair_box[3]) / 2
 
-    # Sandalye boyutları
     chair_width = chair_box[2] - chair_box[0]
     chair_height = chair_box[3] - chair_box[1]
 
-    # Kişinin merkezi sandalye alanının genişletilmiş sınırları içinde mi?
-    x_margin = chair_width * 1.5  # Yatayda daha geniş alan
-    y_margin = chair_height * 1.0  # Dikeyde normal alan
+    x_margin = chair_width * 1.5  
+    y_margin = chair_height * 1.0  
 
     is_within_x = (chair_box[0] - x_margin) <= person_center_x <= (chair_box[2] + x_margin)
     is_within_y = (chair_box[1] - y_margin) <= person_center_y <= (chair_box[3] + y_margin)
 
-    # Eğer kişinin merkezi bu genişletilmiş alanda ise, oturuyor kabul et
     return is_within_x and is_within_y
 
 
@@ -327,8 +301,7 @@ def process_image(image_path):
         conf = float(result.conf[0])
         x1, y1, x2, y2 = map(int, result.xyxy[0])
 
-        # Güven eşiğini düşürdük
-        if conf < 0.3:  # 0.5'ten 0.3'e düşürüldü
+        if conf < 0.3:  
             continue
 
         if label == "person":
@@ -345,19 +318,16 @@ def process_image(image_path):
                 is_sitting = True
                 break
 
-        # Görselleştirme - oturan ve ayakta duranları farklı renklerle göster
-        color = (0, 255, 0) if is_sitting else (0, 0, 255)  # Oturanlar yeşil, ayakta duranlar kırmızı
+        color = (0, 255, 0) if is_sitting else (0, 0, 255)  
         cv2.rectangle(img, (person_box[0], person_box[1]), (person_box[2], person_box[3]), color, 2)
 
-        # Kişinin merkezini göster
         center_x = int((person_box[0] + person_box[2]) / 2)
         center_y = int((person_box[1] + person_box[3]) / 2)
         cv2.circle(img, (center_x, center_y), 5, (255, 0, 255), -1)
 
     for box in chair_boxes:
-        cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 165, 0), 2)  # Sandalyeler turuncu
+        cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), (255, 165, 0), 2)  
 
-    # Daha detaylı bilgi göster
     cv2.putText(img, f"Oturanlar: {sitting_people}", (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     cv2.putText(img, f"Toplam Kisi: {len(person_boxes)}", (30, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
     cv2.putText(img, f"Sandalyeler: {len(chair_boxes)}", (30, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 165, 0), 2)
@@ -431,17 +401,14 @@ def upload():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    # Geçici dosya kaydet
     temp_path = "temp_image.jpg"
     file.save(temp_path)
 
-    # Görüntüyü işle
     sitting_count, total_people, total_chairs, result_path = process_image(temp_path)
 
     if sitting_count is None:
         return jsonify({'error': 'Failed to process image'}), 500
 
-    # Veritabanına kaydet
     db_session = Session()
     record = OccupancyRecord(
         sitting_count=sitting_count,
@@ -454,7 +421,6 @@ def upload():
     db_session.commit()
     db_session.close()
 
-    # Geçici dosyayı sil
     os.remove(temp_path)
 
     return jsonify({
@@ -484,11 +450,9 @@ def history():
 def admin_panel():
     db_session = Session()
     users = db_session.query(User).all()
-    # joinedload ile user ilişkisini önceden yükle
     records = db_session.query(OccupancyRecord).options(joinedload(OccupancyRecord.user)).order_by(
         OccupancyRecord.timestamp.desc()).all()
 
-    # Verileri listede tut
     records_data = []
     for record in records:
         records_data.append({
@@ -511,7 +475,6 @@ def delete_record(record_id):
     db_session = Session()
     record = db_session.query(OccupancyRecord).get(record_id)
     if record:
-        # Görüntüyü sil
         if os.path.exists(record.image_path):
             os.remove(record.image_path)
         db_session.delete(record)
@@ -526,7 +489,7 @@ def delete_record(record_id):
 def toggle_admin(user_id):
     db_session = Session()
     user = db_session.query(User).get(user_id)
-    if user and user.id != session['user_id']:  # Kendi admin yetkisini değiştiremesin
+    if user and user.id != session['user_id']:  
         user.is_admin = not user.is_admin
         db_session.commit()
         flash(f"{user.username} için admin yetkisi {'verildi' if user.is_admin else 'alındı'}!", 'success')
@@ -545,17 +508,15 @@ def analyze_image():
         if file.filename == '':
             return jsonify({'error': 'Dosya seçilmedi'}), 400
 
-        # Geçici dosya oluştur
         temp_path = os.path.join('static', 'temp', secure_filename(file.filename))
         os.makedirs(os.path.dirname(temp_path), exist_ok=True)
         file.save(temp_path)
 
-        # Görüntüyü oku ve analiz et
         frame = cv2.imread(temp_path)
         if frame is None:
             return jsonify({'error': 'Görüntü okunamadı'}), 400
 
-        # YOLO analizi
+
         results = model(frame)[0]
 
         person_boxes = []
@@ -578,7 +539,6 @@ def analyze_image():
                 chair_boxes.append([x1, y1, x2, y2])
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 165, 0), 2)
 
-        # Oturan kişileri tespit et
         sitting_people = 0
         for person_box in person_boxes:
             for chair_box in chair_boxes:
@@ -586,7 +546,6 @@ def analyze_image():
                     sitting_people += 1
                     break
 
-        # Bilgileri ekle
         cv2.putText(frame, f"Oturanlar: {sitting_people}", (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         cv2.putText(frame, f"Toplam Kisi: {len(person_boxes)}", (30, 70),
@@ -594,16 +553,13 @@ def analyze_image():
         cv2.putText(frame, f"Sandalyeler: {len(chair_boxes)}", (30, 110),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 165, 0), 2)
 
-        # Analiz edilmiş görüntüyü kaydet
         output_path = os.path.join('static', 'results',
                                    datetime.now().strftime('%Y%m%d_%H%M%S_') + secure_filename(file.filename))
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         cv2.imwrite(output_path, frame)
 
-        # Geçici dosyayı sil
         os.remove(temp_path)
 
-        # Veritabanına kaydet
         db_session = Session()
         record = OccupancyRecord(
             sitting_count=sitting_people,
@@ -636,7 +592,6 @@ def analyze_image():
 def save_settings():
     try:
         settings = request.get_json()
-        # Ayarları kaydet (şimdilik sadece başarılı yanıt dön)
         return jsonify({'status': 'success'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -646,7 +601,6 @@ def save_settings():
 @admin_required
 def export_data():
     try:
-        # CSV dosyası oluştur
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(['Tarih', 'Oturan Kişi', 'Toplam Kişi', 'Toplam Sandalye', 'Boş Sandalye'])
@@ -665,7 +619,6 @@ def export_data():
 
         db_session.close()
 
-        # CSV dosyasını indir
         output.seek(0)
         return Response(
             output,
@@ -680,6 +633,6 @@ def export_data():
 
 
 if __name__ == '__main__':
-    create_admin()  # İlk admin kullanıcısını oluştur
-    camera = Camera()  # Global camera nesnesini başlat
+    create_admin()  
+    camera = Camera() 
     app.run(debug=True, threaded=True) 
