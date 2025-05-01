@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sol Taraf - Kamera ve Kontroller -->
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Canlı Kamera Görüntüsü</h5>
+                    <div>
+                        <button id="startRecord" class="btn btn-success btn-sm">
+                            <i class="fas fa-record-vinyl"></i> Kayıt Başlat
+                        </button>
+                        <button id="stopRecord" class="btn btn-danger btn-sm" disabled>
+                            <i class="fas fa-stop"></i> Kayıt Durdur
+                        </button>
+                        <button id="restartCamera" class="btn btn-warning btn-sm">
+                            <i class="fas fa-sync"></i> Kamerayı Yenile
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="position-relative">
+                        <img src="{{ url_for('video_feed') }}" class="w-100" style="max-height: 600px; object-fit: contain;">
+                        <div id="cameraStatus" class="position-absolute top-0 start-0 m-2 p-2 rounded" style="background: rgba(0,0,0,0.7); color: white;">
+                            <span id="fpsCounter">FPS: 0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görüntü Yükleme ve Analiz -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Görüntü Analizi</h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" class="mb-4" action="{{ url_for('analyze_image') }}" method="post" enctype="multipart/form-data">
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="imageInput" name="image" accept="image/*">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Analiz Et
+                            </button>
+                        </div>
+                    </form>
+                    <div id="analysisResult" class="d-none">
+                        <h6>Analiz Sonucu:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <img id="analyzedImage" class="img-fluid rounded" style="max-height: 400px;">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <p><strong>Oturan Kişi Sayısı:</strong> <span id="sittingCount">-</span></p>
+                                        <p><strong>Toplam Kişi:</strong> <span id="totalPeople">-</span></p>
+                                        <p><strong>Toplam Sandalye:</strong> <span id="totalChairs">-</span></p>
+                                        <p><strong>Boş Sandalye:</strong> <span id="emptyChairs">-</span></p>
+                                        <p><strong>Analiz Zamanı:</strong> <span id="analysisTime">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Taraf - İstatistikler ve Kontrol Paneli -->
+        <div class="col-lg-4">
+            <!-- Anlık İstatistikler -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Anlık İstatistikler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="liveSittingCount">0</h3>
+                                    <small>Oturan Kişi</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="liveTotalPeople">0</h3>
+                                    <small>Toplam Kişi</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card bg-warning text-dark">
+                                <div class="card-body text-center">
+                                    <h3 id="liveTotalChairs">0</h3>
+                                    <small>Toplam Sandalye</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="liveEmptyChairs">0</h3>
+                                    <small>Boş Sandalye</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sistem Durumu -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Sistem Durumu</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Son Güncelleme:</strong> <span id="lastUpdate">-</span></p>
+                    <p><strong>Kamera Durumu:</strong> <span id="cameraStatusText" class="badge bg-success">Aktif</span></p>
+                    <p><strong>Model Durumu:</strong> <span id="modelStatus" class="badge bg-success">Çalışıyor</span></p>
+                    <div class="progress mb-2">
+                        <div id="systemLoad" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hızlı Eylemler -->
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Hızlı Eylemler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="location.href='{{ url_for('history') }}'">
+                            <i class="fas fa-history"></i> Geçmiş Kayıtlar
+                        </button>
+                        <button class="btn btn-outline-success" onclick="exportData()">
+                            <i class="fas fa-file-export"></i> Verileri Dışa Aktar
+                        </button>
+                        <button class="btn btn-outline-info" onclick="showSettings()">
+                            <i class="fas fa-cog"></i> Ayarlar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ayarlar Modalı -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Sistem Ayarları</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="settingsForm">
+                    <div class="mb-3">
+                        <label class="form-label">Analiz Sıklığı (saniye)</label>
+                        <input type="number" class="form-control" id="analysisPeriod" min="1" max="60" value="2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Minimum Güven Skoru (%)</label>
+                        <input type="number" class="form-control" id="confidenceThreshold" min="1" max="100" value="30">
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoRecord">
+                            <label class="form-check-label">Otomatik Kayıt</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-primary" onclick="saveSettings()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lastTimestamp = new Date();
+let fpsCount = 0;
+let fpsTimer = setInterval(() => {
+    document.getElementById('fpsCounter').textContent = `FPS: ${fpsCount}`;
+    fpsCount = 0;
+}, 1000);
+
+// Anlık istatistikleri güncelle
+function updateLiveStats() {
+    fetch('{{ url_for("get_current_status") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.error) {
+                document.getElementById('liveSittingCount').textContent = data.sitting_count;
+                document.getElementById('liveTotalPeople').textContent = data.total_people;
+                document.getElementById('liveTotalChairs').textContent = data.total_chairs;
+                document.getElementById('liveEmptyChairs').textContent = data.empty_chairs;
+                document.getElementById('lastUpdate').textContent = new Date(data.timestamp).toLocaleTimeString();
+                
+                // Kamera durumunu güncelle
+                document.getElementById('cameraStatusText').className = 'badge bg-success';
+                document.getElementById('cameraStatusText').textContent = 'Aktif';
+                
+                // Model durumunu güncelle
+                document.getElementById('modelStatus').className = 'badge bg-success';
+                document.getElementById('modelStatus').textContent = 'Çalışıyor';
+            } else {
+                // Hata durumunda durum göstergelerini güncelle
+                document.getElementById('cameraStatusText').className = 'badge bg-danger';
+                document.getElementById('cameraStatusText').textContent = 'Bağlantı Kesildi';
+                
+                document.getElementById('modelStatus').className = 'badge bg-warning';
+                document.getElementById('modelStatus').textContent = 'Beklemede';
+            }
+            fpsCount++;
+        })
+        .catch(error => {
+            console.error('İstatistik güncelleme hatası:', error);
+            // Hata durumunda durum göstergelerini güncelle
+            document.getElementById('cameraStatusText').className = 'badge bg-danger';
+            document.getElementById('cameraStatusText').textContent = 'Hata';
+            
+            document.getElementById('modelStatus').className = 'badge bg-danger';
+            document.getElementById('modelStatus').textContent = 'Hata';
+        });
+}
+
+// Sayfa yüklendiğinde ilk güncellemeyi yap
+updateLiveStats();
+
+// Her 2 saniyede bir istatistikleri güncelle
+setInterval(updateLiveStats, 2000);
+
+// Görüntü yükleme ve analiz
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData();
+    const imageFile = document.getElementById('imageInput').files[0];
+    formData.append('image', imageFile);
+
+    fetch('{{ url_for("analyze_image") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('analysisResult').classList.remove('d-none');
+        document.getElementById('analyzedImage').src = data.image_url;
+        document.getElementById('sittingCount').textContent = data.sitting_count;
+        document.getElementById('totalPeople').textContent = data.total_people;
+        document.getElementById('totalChairs').textContent = data.total_chairs;
+        document.getElementById('emptyChairs').textContent = data.empty_chairs;
+        document.getElementById('analysisTime').textContent = new Date(data.timestamp).toLocaleString();
+    });
+});
+
+// Kamera yenileme
+document.getElementById('restartCamera').addEventListener('click', function() {
+    fetch('{{ url_for("check_camera") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Kamera başarıyla yenilendi!');
+            } else {
+                alert('Kamera yenileme başarısız: ' + data.message);
+            }
+        });
+});
+
+// Ayarlar modalını göster
+function showSettings() {
+    var settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
+    settingsModal.show();
+}
+
+// Ayarları kaydet
+function saveSettings() {
+    const settings = {
+        analysisPeriod: document.getElementById('analysisPeriod').value,
+        confidenceThreshold: document.getElementById('confidenceThreshold').value,
+        autoRecord: document.getElementById('autoRecord').checked
+    };
+    
+    fetch('{{ url_for("save_settings") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Ayarlar kaydedildi!');
+            bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+        }
+    });
+}
+
+// Verileri dışa aktar
+function exportData() {
+    window.location.href = '{{ url_for("export_data") }}';
+}
+
+// Sistem yükünü simüle et
+setInterval(() => {
+    const load = Math.random() * 100;
+    document.getElementById('systemLoad').style.width = `${load}%`;
+    document.getElementById('systemLoad').className = `progress-bar ${load > 80 ? 'bg-danger' : load > 60 ? 'bg-warning' : 'bg-success'}`;
+}, 5000);
+</script>
+{% endblock %} 

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Anlık Doluluk Durumu -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Anlık Doluluk Durumu</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-primary">{{ current_status.sitting_count }}</h3>
+                                <p class="text-muted">Oturan Kişi</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-success">{{ current_status.total_people }}</h3>
+                                <p class="text-muted">Toplam Kişi</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-info">{{ current_status.total_chairs }}</h3>
+                                <p class="text-muted">Toplam Sandalye</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-warning">{{ current_status.empty_chairs }}</h3>
+                                <p class="text-muted">Boş Sandalye</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <small class="text-muted">Son Güncelleme: {{ current_status.timestamp }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fotoğraf Analizi -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Fotoğraf Analizi</h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" class="mb-4">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="file" class="form-control" id="imageInput" accept="image/*" required>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-upload me-2"></i>Analiz Et
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div id="analysisResult" class="d-none">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <img id="resultImage" class="img-fluid rounded" alt="Analiz Sonucu">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mt-3">
+                                    <h6>Analiz Sonuçları:</h6>
+                                    <ul class="list-group">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            Oturan Kişi
+                                            <span id="sittingCount" class="badge bg-primary rounded-pill"></span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            Toplam Kişi
+                                            <span id="totalPeople" class="badge bg-success rounded-pill"></span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            Toplam Sandalye
+                                            <span id="totalChairs" class="badge bg-info rounded-pill"></span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            Boş Sandalye
+                                            <span id="emptyChairs" class="badge bg-warning rounded-pill"></span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Son Analizler -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Son Analizler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for record in user_records %}
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <img src="{{ record.image_path }}" class="card-img-top" alt="Analiz Sonucu">
+                                <div class="card-body">
+                                    <h6 class="card-title">Analiz Sonuçları:</h6>
+                                    <ul class="list-unstyled">
+                                        <li><i class="fas fa-user me-2"></i>Oturan: {{ record.sitting_count }}</li>
+                                        <li><i class="fas fa-users me-2"></i>Toplam: {{ record.total_people }}</li>
+                                        <li><i class="fas fa-chair me-2"></i>Sandalye: {{ record.total_chairs }}</li>
+                                        <li><i class="fas fa-clock me-2"></i>{{ record.timestamp.strftime('%d.%m.%Y %H:%M') }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData();
+    const imageFile = document.getElementById('imageInput').files[0];
+    formData.append('image', imageFile);
+
+    try {
+        const response = await fetch('/analyze_image', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+
+        // Sonuçları göster
+        document.getElementById('resultImage').src = data.image_url;
+        document.getElementById('sittingCount').textContent = data.sitting_count;
+        document.getElementById('totalPeople').textContent = data.total_people;
+        document.getElementById('totalChairs').textContent = data.total_chairs;
+        document.getElementById('emptyChairs').textContent = data.empty_chairs;
+
+        document.getElementById('analysisResult').classList.remove('d-none');
+
+        // Sayfayı yenile
+        setTimeout(() => window.location.reload(), 2000);
+
+    } catch (error) {
+        console.error('Hata:', error);
+        alert('Analiz sırasında bir hata oluştu.');
+    }
+});
+
+// Anlık istatistikleri güncelle
+function updateStats() {
+    fetch('/get_current_status')
+        .then(response => response.json())
+        .then(data => {
+            // Tüm istatistik değerlerini güncelle
+            const stats = document.querySelectorAll('.card-body .text-center h3');
+            stats[0].textContent = data.sitting_count;
+            stats[1].textContent = data.total_people;
+            stats[2].textContent = data.total_chairs;
+            stats[3].textContent = data.empty_chairs;
+
+            // Son güncelleme zamanını güncelle
+            const timestamp = new Date(data.timestamp);
+            const formattedTime = timestamp.toLocaleTimeString('tr-TR');
+            document.querySelector('.text-muted').textContent = `Son Güncelleme: ${formattedTime}`;
+        })
+        .catch(error => console.error('Hata:', error));
+}
+
+// Sayfa yüklendiğinde ilk güncellemeyi yap
+updateStats();
+
+// Her 2 saniyede bir güncelle
+setInterval(updateStats, 2000);
+</script>
+{% endblock %}
